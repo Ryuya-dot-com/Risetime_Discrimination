@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Rise Time Discrimination</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --accent: #38bdf8;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border: #1f2937;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      background: radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.08), transparent 30%),
+                  radial-gradient(circle at 80% 0%, rgba(139, 92, 246, 0.08), transparent 25%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+    main { width: min(960px, 100%); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+      display: none;
+    }
+    .card.active { display: block; }
+    h1, h2 { margin: 0 0 12px; letter-spacing: 0.02em; }
+    p { margin: 0 0 12px; color: var(--muted); line-height: 1.6; }
+    .stack { display: flex; flex-direction: column; gap: 16px; }
+    label { color: var(--text); font-weight: 600; }
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0b1220;
+      color: var(--text);
+      font-size: 16px;
+    }
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-size: 16px;
+      cursor: pointer;
+      color: #0b1220;
+      background: var(--accent);
+      font-weight: 700;
+      transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 30px rgba(56, 189, 248, 0.35);
+    }
+    .response-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      margin-top: 20px;
+    }
+    .response-buttons button {
+      width: 120px;
+      height: 120px;
+      font-size: 64px;
+      border-radius: 18px;
+      background: #111827;
+      color: var(--text);
+      border: 2px solid var(--border);
+    }
+    .tag {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.18);
+      color: var(--text);
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .status { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="setup" class="card active">
+      <div class="tag">ステップ 1/3</div>
+      <h1>上昇時間の弁別テスト</h1>
+      <div class="stack">
+        <p>実験を開始する前に参加者IDを入力してください。</p>
+        <div>
+          <label for="subjectId">参加者ID</label>
+          <input id="subjectId" type="text" placeholder="例: S01">
+        </div>
+        <button id="toInstructions">説明へ進む</button>
+      </div>
+    </section>
+
+    <section id="instructions" class="card">
+      <div class="tag">ステップ 2/3</div>
+      <h2>実験の説明</h2>
+      <p>このテストの各試行では 3 つの音が流れます。1 つだけ他の 2 つと異なる音があります。</p>
+      <p>どの音が異なるかを答えてください。異なる音は必ず 1 番目または 3 番目のどちらかです。</p>
+      <p>1 番目が異なると思ったら「1」、3 番目が異なると思ったら「3」をクリックしてください。</p>
+      <p>練習試行はありません。開始後は音が順に再生されますので、最後までお待ちください。</p>
+      <button id="startTest">テストを開始</button>
+    </section>
+
+    <section id="trial" class="card">
+      <div class="tag">ステップ 3/3</div>
+      <h2>弁別してください</h2>
+      <p id="trialPrompt">どの音が異なるでしょうか？ (1 または 3)</p>
+      <p id="playbackStatus" class="status">音声を再生しています...</p>
+      <div class="response-buttons">
+        <button id="choose1" data-choice="1" disabled>1</button>
+        <button id="choose3" data-choice="3" disabled>3</button>
+      </div>
+    </section>
+
+    <section id="complete" class="card">
+      <div class="tag">完了</div>
+      <h2>ありがとうございました</h2>
+      <p>テストが終了しました。結果は CSV 形式で保存できます。</p>
+      <p id="thresholdText" class="status"></p>
+      <div class="stack">
+        <button id="downloadCsv">結果をダウンロード</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="risetime_discrimination.js"></script>
+</body>
+</html>
