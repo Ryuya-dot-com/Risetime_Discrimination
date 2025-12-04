@@ -9,18 +9,30 @@ const config = {
   stepSizes: [10, 5, 2, 1, 1, 1, 1, 1]
 };
 
+const practiceConfig = {
+  trials: 3,
+  baseStep: 1,
+  differentStep: 100
+};
+
 const elements = {
   setup: document.getElementById('setup'),
   instructions: document.getElementById('instructions'),
   trial: document.getElementById('trial'),
   complete: document.getElementById('complete'),
   toInstructions: document.getElementById('toInstructions'),
+  startPractice: document.getElementById('startPractice'),
   startTest: document.getElementById('startTest'),
   downloadCsv: document.getElementById('downloadCsv'),
   choose1: document.getElementById('choose1'),
   choose3: document.getElementById('choose3'),
   playbackStatus: document.getElementById('playbackStatus'),
   thresholdText: document.getElementById('thresholdText'),
+  practiceStatus: document.getElementById('practiceStatus'),
+  sessionTag: document.getElementById('sessionTag'),
+  trialHeading: document.getElementById('trialHeading'),
+  trialPrompt: document.getElementById('trialPrompt'),
+  feedback: document.getElementById('feedback'),
   subjectId: document.getElementById('subjectId')
 };
 
@@ -41,6 +53,12 @@ const state = {
   lastCorrect: -1,
   numCorrect: 0,
   reversalsSum: 0
+};
+
+const practiceState = {
+  currentTrial: 0,
+  order: [],
+  completed: false
 };
 
 function initAudioPool(numSteps) {
@@ -68,6 +86,39 @@ function showSection(section) {
   elements[section].classList.add('active');
 }
 
+function setSessionUi(mode) {
+  const tagBase = 'ステップ 3/4';
+  if (mode === 'practice') {
+    elements.sessionTag.textContent = `${tagBase} | 練習`;
+    elements.trialHeading.textContent = '練習: 弁別してください';
+    elements.trialPrompt.textContent = 'はっきり異なる音です。1 番目か 3 番目を選んでください。';
+  } else {
+    elements.sessionTag.textContent = `${tagBase} | 本番`;
+    elements.trialHeading.textContent = '弁別してください';
+    elements.trialPrompt.textContent = 'どの音が異なるでしょうか？ (1 または 3)';
+  }
+  elements.playbackStatus.textContent = '音声を再生しています...';
+}
+
+function clearFeedback() {
+  elements.feedback.textContent = '';
+  elements.feedback.classList.remove('correct', 'incorrect');
+}
+
+function setFeedback(message, wasCorrect) {
+  elements.feedback.textContent = message;
+  elements.feedback.classList.remove('correct', 'incorrect');
+  elements.feedback.classList.add(wasCorrect ? 'correct' : 'incorrect');
+}
+
+function resetPracticeProgress() {
+  practiceState.currentTrial = 0;
+  practiceState.order = [];
+  practiceState.completed = false;
+  elements.startTest.disabled = true;
+  elements.practiceStatus.textContent = 'まず練習を完了してください。（刺激 1 と 100 を使用）';
+}
+
 function shuffle(array) {
   const arr = array.slice();
   for (let i = arr.length - 1; i > 0; i--) {
@@ -84,26 +135,53 @@ function buildStimOrder() {
   return shuffle(arr);
 }
 
+function buildPracticeOrder(numTrials) {
+  const arr = [];
+  for (let i = 0; i < numTrials; i++) {
+    arr.push(Math.random() < 0.5 ? 0 : 1);
+  }
+  return arr;
+}
+
 function toggleResponseButtons(enabled) {
   elements.choose1.disabled = !enabled;
   elements.choose3.disabled = !enabled;
 }
 
-async function playSequence(first, second, third) {
-  resetAudio(first);
-  resetAudio(second);
-  resetAudio(third);
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-  await new Promise(resolve => {
-    first.addEventListener('ended', () => setTimeout(() => {
-      second.addEventListener('ended', () => setTimeout(() => {
-        third.addEventListener('ended', () => setTimeout(resolve, config.postSequenceDelay), { once: true });
-        third.play();
-      }, config.interStimulusDelay), { once: true });
-      second.play();
-    }, config.interStimulusDelay), { once: true });
-    first.play();
+function playAndWait(audio) {
+  resetAudio(audio);
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
+      resolve();
+    };
+    const onEnded = () => finish();
+    const onError = () => finish();
+    audio.addEventListener('ended', onEnded, { once: true });
+    audio.addEventListener('error', onError, { once: true });
+    const fallbackMs = Number.isFinite(audio.duration) && audio.duration > 0
+      ? Math.round(audio.duration * 1000) + 200
+      : 4000;
+    setTimeout(finish, fallbackMs);
+    audio.play().catch(() => finish());
   });
+}
+
+async function playSequence(first, second, third) {
+  await playAndWait(first);
+  await wait(config.interStimulusDelay);
+  await playAndWait(second);
+  await wait(config.interStimulusDelay);
+  await playAndWait(third);
+  await wait(config.postSequenceDelay);
 }
 
 function startExperiment() {
@@ -115,8 +193,43 @@ function startExperiment() {
   state.reversalsSum = 0;
   results.length = 0;
   stimOrder = buildStimOrder();
+  setSessionUi('test');
+  clearFeedback();
   showSection('trial');
   runTrial();
+}
+
+function startPractice() {
+  practiceState.currentTrial = 0;
+  practiceState.order = buildPracticeOrder(practiceConfig.trials);
+  practiceState.completed = false;
+  elements.startTest.disabled = true;
+  elements.practiceStatus.textContent = '練習中です。音声の再生後に 1 か 3 を選んでください。';
+  setSessionUi('practice');
+  clearFeedback();
+  showSection('trial');
+  runPracticeTrial();
+}
+
+async function runPracticeTrial() {
+  clearFeedback();
+  const trialIndex = practiceState.currentTrial;
+  const oddIsThird = practiceState.order[trialIndex] === 0;
+  const correctAnswer = oddIsThird ? '3' : '1';
+
+  toggleResponseButtons(false);
+  elements.playbackStatus.textContent = `練習 ${trialIndex + 1}/${practiceConfig.trials}：音声を再生しています...`;
+
+  const differentAudio = audioPool[practiceConfig.differentStep];
+  const first = oddIsThird ? baseAudioA : differentAudio;
+  const second = baseAudioB;
+  const third = oddIsThird ? differentAudio : baseAudioB;
+  trialState = { correctAnswer, trialStep: practiceConfig.differentStep, oddPosition: oddIsThird ? 3 : 1, mode: 'practice' };
+
+  await playSequence(first, second, third);
+  responseWindowStart = performance.now();
+  elements.playbackStatus.textContent = `練習 ${trialIndex + 1}/${practiceConfig.trials}：1 番目か 3 番目かを選んでください。`;
+  toggleResponseButtons(true);
 }
 
 function nextTrial() {
@@ -132,6 +245,7 @@ async function runTrial() {
   const correctAnswer = oddIsThird ? '3' : '1';
   const trialStep = state.currentStep;
 
+  clearFeedback();
   toggleResponseButtons(false);
   elements.playbackStatus.textContent = '音声を再生しています...';
 
@@ -139,7 +253,7 @@ async function runTrial() {
   const first = oddIsThird ? baseAudioA : stepAudio;
   const second = oddIsThird ? baseAudioB : baseAudioA;
   const third = oddIsThird ? stepAudio : baseAudioB;
-  trialState = { correctAnswer, trialStep, oddPosition: oddIsThird ? 3 : 1 };
+  trialState = { correctAnswer, trialStep, oddPosition: oddIsThird ? 3 : 1, mode: 'test' };
 
   await playSequence(first, second, third);
   responseWindowStart = performance.now();
@@ -151,9 +265,33 @@ function handleResponse(choice) {
   if (!responseWindowStart) return;
   const rtMs = Math.round(performance.now() - responseWindowStart);
   toggleResponseButtons(false);
-  elements.playbackStatus.textContent = '回答を記録しました。次の試行を準備しています...';
 
   const wasCorrect = choice === trialState.correctAnswer;
+  if (trialState.mode === 'practice') {
+    responseWindowStart = null;
+    const practiceMessage = wasCorrect
+      ? '正解です！次の練習に進みます。'
+      : `不正解です。正解は ${trialState.correctAnswer} 番目でした。`;
+    elements.playbackStatus.textContent = practiceMessage;
+    setFeedback(practiceMessage, wasCorrect);
+    practiceState.currentTrial += 1;
+    if (practiceState.currentTrial >= practiceConfig.trials) {
+      practiceState.completed = true;
+      elements.practiceStatus.textContent = '練習が完了しました。本番を開始できます。';
+      elements.startTest.disabled = false;
+      setTimeout(() => {
+        clearFeedback();
+        showSection('instructions');
+      }, config.postResponseDelay);
+    } else {
+      setTimeout(runPracticeTrial, config.postResponseDelay);
+    }
+    return;
+  }
+
+  elements.playbackStatus.textContent = wasCorrect
+    ? '正解です！次の試行を準備しています...'
+    : `不正解です。正解は ${trialState.correctAnswer} 番目でした。次の試行を準備しています...`;
   const prevStep = state.currentStep;
 
   const stepSizeUsed = applyStaircase(wasCorrect);
@@ -175,6 +313,7 @@ function handleResponse(choice) {
     mean_reversal_so_far: meanReversal
   });
 
+  setFeedback(wasCorrect ? '正解です！' : `不正解です。正解は ${trialState.correctAnswer} 番目でした。`, wasCorrect);
   state.currentTrial += 1;
   responseWindowStart = null;
   setTimeout(nextTrial, config.postResponseDelay);
@@ -283,13 +422,25 @@ elements.toInstructions.addEventListener('click', () => {
     return;
   }
   subjectId = value;
+  resetPracticeProgress();
   showSection('instructions');
 });
 
+elements.startPractice.addEventListener('click', () => {
+  responseWindowStart = null;
+  startPractice();
+});
+
 elements.startTest.addEventListener('click', () => {
+  if (!practiceState.completed) {
+    elements.practiceStatus.textContent = '本番を開始する前に練習を完了してください。';
+    return;
+  }
   startExperiment();
 });
 
 elements.choose1.addEventListener('click', () => handleResponse('1'));
 elements.choose3.addEventListener('click', () => handleResponse('3'));
 elements.downloadCsv.addEventListener('click', downloadCsv);
+
+resetPracticeProgress();
