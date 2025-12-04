@@ -11,6 +11,8 @@
       --text: #e5e7eb;
       --muted: #9ca3af;
       --border: #1f2937;
+      --success: #34d399;
+      --error: #f87171;
     }
     * { box-sizing: border-box; }
     body {
@@ -70,6 +72,11 @@
       transform: translateY(-1px);
       box-shadow: 0 10px 30px rgba(56, 189, 248, 0.35);
     }
+    .button-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
     .response-buttons {
       display: flex;
       justify-content: center;
@@ -94,13 +101,20 @@
       font-size: 14px;
       margin-bottom: 8px;
     }
+    .feedback {
+      min-height: 24px;
+      margin-top: 12px;
+      font-weight: 600;
+    }
+    .feedback.correct { color: var(--success); }
+    .feedback.incorrect { color: var(--error); }
     .status { color: var(--muted); }
   </style>
 </head>
 <body>
   <main>
     <section id="setup" class="card active">
-      <div class="tag">ステップ 1/3</div>
+      <div class="tag">ステップ 1/4</div>
       <h1>上昇時間の弁別テスト</h1>
       <div class="stack">
         <p>実験を開始する前に参加者IDを入力してください。</p>
@@ -113,24 +127,29 @@
     </section>
 
     <section id="instructions" class="card">
-      <div class="tag">ステップ 2/3</div>
+      <div class="tag">ステップ 2/4</div>
       <h2>実験の説明</h2>
       <p>このテストの各試行では 3 つの音が流れます。1 つだけ他の 2 つと異なる音があります。</p>
       <p>どの音が異なるかを答えてください。異なる音は必ず 1 番目または 3 番目のどちらかです。</p>
-      <p>1 番目が異なると思ったら「1」、3 番目が異なると思ったら「3」をクリックしてください。</p>
-      <p>練習試行はありません。開始後は音が順に再生されますので、最後までお待ちください。</p>
-      <button id="startTest">テストを開始</button>
+      <p>まずは刺激 1 と 100（大きく異なる音）を用いた練習で、手順とボタンの位置に慣れてください。</p>
+      <p>各回答後に正誤のフィードバックが表示されます。練習完了後に本番を開始できます。</p>
+      <div class="button-row">
+        <button id="startPractice">練習を開始</button>
+        <button id="startTest" disabled>本番を開始</button>
+      </div>
+      <p id="practiceStatus" class="status">まず練習を完了してください。（刺激 1 と 100 を使用）</p>
     </section>
 
     <section id="trial" class="card">
-      <div class="tag">ステップ 3/3</div>
-      <h2>弁別してください</h2>
+      <div class="tag" id="sessionTag">ステップ 3/4</div>
+      <h2 id="trialHeading">弁別してください</h2>
       <p id="trialPrompt">どの音が異なるでしょうか？ (1 または 3)</p>
       <p id="playbackStatus" class="status">音声を再生しています...</p>
       <div class="response-buttons">
         <button id="choose1" data-choice="1" disabled>1</button>
         <button id="choose3" data-choice="3" disabled>3</button>
       </div>
+      <p id="feedback" class="feedback status"></p>
     </section>
 
     <section id="complete" class="card">
